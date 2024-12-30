@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
 
-
 class ImageViewer(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -15,7 +14,12 @@ class ImageViewer(QMainWindow):
 
         # Initialize images
         self.input_image = None
-        self.original_image = None  # Store the original image for zooming
+        self.original_image = None  # Store the original image for zooming and processing
+        self.processed_images = {
+            "Input Viewport": None,
+            "Output Viewport 1": None,
+            "Output Viewport 2": None,
+        }
 
         # Main layout
         self.main_layout = QVBoxLayout()
@@ -30,7 +34,7 @@ class ImageViewer(QMainWindow):
         for label in [self.input_label, self.output_label1, self.output_label2]:
             label.setAlignment(Qt.AlignCenter)
             label.setStyleSheet("border: 1px solid black; background-color: #f0f0f0;")
-            label.setFixedSize(300, 300)  # Fixed size for input and output labels
+            label.setFixedSize(300, 300)
 
         self.image_layout.addWidget(self.input_label)
         self.image_layout.addWidget(self.output_label1)
@@ -53,37 +57,157 @@ class ImageViewer(QMainWindow):
         self.open_button = QPushButton("Open Image")
         self.histogram_button = QPushButton("Show Histogram")
         self.zoom_slider = QSlider(Qt.Horizontal)
-        self.zoom_slider.setRange(1, 4)  # Zoom range from 1x to 4x
-        self.zoom_slider.setValue(1)  # Default zoom level
+        self.zoom_slider.setRange(1, 4)
+        self.zoom_slider.setValue(1)
         self.zoom_slider.setTickPosition(QSlider.TicksBelow)
         self.zoom_slider.setTickInterval(1)
 
+        self.brightness_slider = QSlider(Qt.Horizontal)
+        self.brightness_slider.setRange(-100, 100)
+        self.brightness_slider.setValue(0)
+
+        self.contrast_slider = QSlider(Qt.Horizontal)
+        self.contrast_slider.setRange(0, 200)
+        self.contrast_slider.setValue(100)
+        self.zoom_slider.valueChanged.connect(self.zoom_image)
+        self.brightness_slider.valueChanged.connect(self.adjust_brightness_contrast)
+        self.contrast_slider.valueChanged.connect(self.adjust_brightness_contrast)
         self.controls_layout.addWidget(self.open_button)
         self.controls_layout.addWidget(self.histogram_button)
         self.controls_layout.addWidget(QLabel("Zoom (1x to 4x)"))
         self.controls_layout.addWidget(self.zoom_slider)
+        self.controls_layout.addWidget(QLabel("Brightness (-100 to 100)"))
+        self.controls_layout.addWidget(self.brightness_slider)
+        self.controls_layout.addWidget(QLabel("Contrast (0 to 200)"))
+        self.controls_layout.addWidget(self.contrast_slider)
 
+        self.hist_eq_button = QPushButton("Histogram Equalization")
+        self.clahe_button = QPushButton("CLAHE")
+        self.custom_contrast_button = QPushButton("Custom Contrast")
+
+        self.controls_layout.addWidget(self.hist_eq_button)
+        self.controls_layout.addWidget(self.clahe_button)
+        self.controls_layout.addWidget(self.custom_contrast_button)
         self.main_layout.addLayout(self.controls_layout)
-
+        self.hist_eq_button.clicked.connect(self.apply_histogram_equalization)
+        self.clahe_button.clicked.connect(self.apply_clahe)
+        self.custom_contrast_button.clicked.connect(self.apply_custom_contrast)
         # Central widget
         central_widget = QWidget()
         central_widget.setLayout(self.main_layout)
         self.setCentralWidget(central_widget)
 
-        # Connect buttons
+        # Connect buttons and sliders
         self.open_button.clicked.connect(self.open_image)
-       # self.histogram_button.clicked.connect(self.show_histogram_in_ui)
-        self.zoom_slider.valueChanged.connect(self.zoom_image)
+
+
 
     def open_image(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
         if file_path:
-            self.original_image = cv2.imread(file_path, cv2.IMREAD_COLOR)  # Load image
-            self.original_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2RGB)  # Convert to RGB
-            self.input_image = self.original_image.copy()  # Store a copy for display
-            self.display_image(self.input_image, self.input_label)  # Display the input image
-            self.output_label1.clear()  # Clear output labels
-            self.output_label2.clear()
+            self.original_image = cv2.imread(file_path, cv2.IMREAD_COLOR)
+            self.original_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2RGB)
+            self.processed_images["Input Viewport"] = self.original_image.copy()
+            self.display_image(self.original_image, self.input_label)
+
+    def apply_histogram_equalization(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        # Convert to grayscale for histogram equalization
+        gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_RGB2GRAY)
+        equalized_image = cv2.equalizeHist(gray_image)
+
+        # Convert back to 3-channel image for display
+        result_image = cv2.cvtColor(equalized_image, cv2.COLOR_GRAY2RGB)
+
+        # Display result
+        self.display_image(result_image, self.output_label1)
+
+    def apply_clahe(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        # Map selection to QLabel
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Convert to grayscale for CLAHE
+        gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_RGB2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe_image = clahe.apply(gray_image)
+
+        # Convert back to 3-channel image for display
+        result_image = cv2.cvtColor(clahe_image, cv2.COLOR_GRAY2RGB)
+
+        # Display result
+        self.display_image(result_image, apply_label)
+
+        def apply_custom_contrast(self):
+            if self.original_image is None:
+                print("No image loaded.")
+                return
+
+            # Apply Gamma Correction
+            gamma = 1.5  # Change this value for different results
+            look_up_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(256)]).astype("uint8")
+            result_image = cv2.LUT(self.original_image, look_up_table)
+
+            # Display result
+            self.display_image(result_image, self.output_label2)
+
+    def apply_custom_contrast(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        # Apply Gamma Correction
+        gamma = 1.5  # Change this value for different results
+        look_up_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(256)]).astype("uint8")
+        result_image = cv2.LUT(self.original_image, look_up_table)
+
+        # Display result
+        self.display_image(result_image, self.output_label2)
+    def adjust_brightness_contrast(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        # Get brightness and contrast values
+        brightness = self.brightness_slider.value()
+        contrast = self.contrast_slider.value()
+
+        # Calculate the alpha (contrast) and beta (brightness)
+        alpha = 1 + (contrast / 100.0)  # Scale factor
+        beta = brightness  # Brightness addition
+
+        # Apply the adjustments to the image
+        adjusted_image = cv2.convertScaleAbs(self.original_image, alpha=alpha, beta=beta)
+
+        # Determine which viewport to edit and apply changes
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        # Map selection to QLabel
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        apply_label = viewport_mapping[selected_apply_viewport]
+        self.display_image(adjusted_image, apply_label)
 
     def display_image(self, image, label, zoom_factor=1):
         if image is None:

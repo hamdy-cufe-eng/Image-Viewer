@@ -2,7 +2,7 @@ import sys
 import cv2
 import numpy as np
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QWidget, QSlider, QDialog, QGridLayout, QComboBox
+    QApplication, QMainWindow,QAction, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QWidget, QSlider, QDialog, QGridLayout, QComboBox
 )
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint
@@ -50,104 +50,171 @@ class ImageViewer(QMainWindow):
 
         # Initialize images
         self.input_image = None
-        self.original_image = None  # Store the original image for zooming and processing
+        self.original_image = None
+        self.output1_image = None
+        self.output2_image = None
+
+        # Store the original image for zooming and processing
         self.processed_images = {
             "Input Viewport": None,
             "Output Viewport 1": None,
             "Output Viewport 2": None,
         }
 
-        # Main layout
-        self.main_layout = QVBoxLayout()
-        self.image_layout = QHBoxLayout()
-        self.controls_layout = QVBoxLayout()
+        self.create_menu_bar()
 
-        # Input and output viewports
+        # Main Layout
+        self.main_layout = QVBoxLayout()
+
+        # Image Viewports Layout
+        self.image_layout = QHBoxLayout()
+        self.create_viewports()
+        self.image_layout.addStretch()  # Centering the viewports
+        self.main_layout.addLayout(self.image_layout)
+
+        # Controls Layout
+        self.controls_layout = QVBoxLayout()
+        self.create_controls()
+        self.main_layout.addLayout(self.controls_layout)
+
+        # Central Widget
+        central_widget = QWidget()
+        central_widget.setLayout(self.main_layout)
+        self.setCentralWidget(central_widget)
+
+    def create_menu_bar(self):
+        """Create the menu bar with actions."""
+        menubar = self.menuBar()
+
+        # File Menu
+        file_menu = menubar.addMenu("File")
+        open_action = QAction("Open Image", self)
+        open_action.triggered.connect(self.open_image)
+        file_menu.addAction(open_action)
+
+        # Denoising Menu
+        denoising_menu = menubar.addMenu("Denoising")
+        self.create_denoising_actions(denoising_menu)
+
+        # Noise Menu
+        noise_menu = menubar.addMenu("Noise")
+        self.create_noise_actions(noise_menu)
+
+        # Filter Menu
+        filter_menu = menubar.addMenu("Filters")
+        self.create_filter_actions(filter_menu)
+
+        # Histogram Menu
+        histogram_menu = menubar.addMenu("Histogram")
+        histogram_eq_action = QAction("Histogram Equalization", self)
+        histogram_eq_action.triggered.connect(self.apply_histogram_equalization)
+        histogram_menu.addAction(histogram_eq_action)
+
+        clahe_action = QAction("CLAHE", self)
+        clahe_action.triggered.connect(self.apply_clahe)
+        histogram_menu.addAction(clahe_action)
+
+        custom_contrast_action = QAction("Custom Contrast", self)
+        custom_contrast_action.triggered.connect(self.apply_custom_contrast)
+        histogram_menu.addAction(custom_contrast_action)
+
+    def create_denoising_actions(self, menu):
+        """Create denoising actions and add them to the menu."""
+        denoise_action = QAction("Apply Denoising", self)
+        denoise_action.triggered.connect(self.apply_denoising)
+        menu.addAction(denoise_action)
+
+    def create_noise_actions(self, menu):
+        """Create noise actions and add them to the menu."""
+        gaussian_noise_action = QAction("Add Gaussian Noise", self)
+        gaussian_noise_action.triggered.connect(self.add_gaussian_noise)
+        menu.addAction(gaussian_noise_action)
+
+        salt_pepper_noise_action = QAction("Add Salt & Pepper Noise", self)
+        salt_pepper_noise_action.triggered.connect(self.add_salt_pepper_noise)
+        menu.addAction(salt_pepper_noise_action)
+
+        poisson_noise_action = QAction("Add Poisson Noise", self)
+        poisson_noise_action.triggered.connect(self.add_poisson_noise)
+        menu.addAction(poisson_noise_action)
+
+    def create_filter_actions(self, menu):
+        """Create filter actions and add them to the menu."""
+        low_pass_action = QAction("Apply LowPass Filter", self)
+        low_pass_action.triggered.connect(self.apply_low_pass_filter)
+        menu.addAction(low_pass_action)
+
+        high_pass_action = QAction("Apply HighPass Filter", self)
+        high_pass_action.triggered.connect(self.apply_high_pass_filter)
+        menu.addAction(high_pass_action)
+
+    def create_viewports(self):
+        """Create and setup image viewports."""
         self.input_label = ClickableLabel("Input Viewport")
         self.output_label1 = ClickableLabel("Output Viewport 1")
         self.output_label2 = ClickableLabel("Output Viewport 2")
 
         for label in [self.input_label, self.output_label1, self.output_label2]:
             label.setAlignment(Qt.AlignCenter)
-            label.setStyleSheet("border: 1px solid black; background-color: #f0f0f0;")
+            label.setStyleSheet("border: 1px solid rgb(9, 132, 227);; background-color: black;")
             label.setFixedSize(300, 300)
 
         self.image_layout.addWidget(self.input_label)
         self.image_layout.addWidget(self.output_label1)
         self.image_layout.addWidget(self.output_label2)
-        self.main_layout.addLayout(self.image_layout)
 
-        # Dropdown boxes
-        self.edit_viewport_selector = QComboBox()
-        self.edit_viewport_selector.addItems(["Input Viewport", "Output Viewport 1", "Output Viewport 2"])
+    def create_controls(self):
+        """Create and setup controls for the application."""
+        # Dropdown boxes for viewport selection
+        self.edit_viewport_selector = self.create_combobox(
+            ["Input Viewport", "Output Viewport 1", "Output Viewport 2"], "Edit Viewport:"
+        )
+        self.apply_viewport_selector = self.create_combobox(
+            ["Input Viewport", "Output Viewport 1", "Output Viewport 2"], "Apply Changes To:"
+        )
+        self.zoom_technique = self.create_combobox(
+            ["Nearest-Neighbor", "Linear", "Bi-linear","Cubic"], "Zoom Technique:"
+        )
+        # Sliders for zoom, brightness, and contrast
+        self.zoom_slider = self.create_slider(Qt.Horizontal, 1, 4, 1, "Zoom (1x to 4x)")
+        self.brightness_slider = self.create_slider(Qt.Horizontal, -100, 100, 0, "Brightness (-100 to 100)")
+        self.contrast_slider = self.create_slider(Qt.Horizontal, 0, 200, 100, "Contrast (0 to 200)")
 
-        self.apply_viewport_selector = QComboBox()
-        self.apply_viewport_selector.addItems(["Input Viewport", "Output Viewport 1", "Output Viewport 2"])
+        # Additional options
+        self.denoising_dropdown = self.create_combobox(
+            ["Median Filter", "Gaussian Filter", "Non-Local Means"], "Denoising Method:"
+        )
 
-        self.controls_layout.addWidget(QLabel("Edit Viewport:"))
-        self.controls_layout.addWidget(self.edit_viewport_selector)
-        self.controls_layout.addWidget(QLabel("Apply Changes To:"))
-        self.controls_layout.addWidget(self.apply_viewport_selector)
-
-        # Controls
-        self.open_button = QPushButton("Open Image")
-        self.histogram_button = QPushButton("Show Histogram")
-        self.zoom_slider = QSlider(Qt.Horizontal)
-        self.zoom_slider.setRange(1, 4)
-        self.zoom_slider.setValue(1)
-        self.zoom_slider.setTickPosition(QSlider.TicksBelow)
-        self.zoom_slider.setTickInterval(1)
-
-        self.brightness_slider = QSlider(Qt.Horizontal)
-        self.brightness_slider.setRange(-100, 100)
-        self.brightness_slider.setValue(0)
-
-        self.contrast_slider = QSlider(Qt.Horizontal)
-        self.contrast_slider.setRange(0, 200)
-        self.contrast_slider.setValue(100)
-        self.zoom_slider.valueChanged.connect(self.zoom_image)
-        self.brightness_slider.valueChanged.connect(self.adjust_brightness_contrast)
-        self.contrast_slider.valueChanged.connect(self.adjust_brightness_contrast)
-        self.controls_layout.addWidget(self.open_button)
-        self.controls_layout.addWidget(self.histogram_button)
-        self.controls_layout.addWidget(QLabel("Zoom (1x to 4x)"))
-        self.controls_layout.addWidget(self.zoom_slider)
-        self.controls_layout.addWidget(QLabel("Brightness (-100 to 100)"))
-        self.controls_layout.addWidget(self.brightness_slider)
-        self.controls_layout.addWidget(QLabel("Contrast (0 to 200)"))
-        self.controls_layout.addWidget(self.contrast_slider)
-
-        self.hist_eq_button = QPushButton("Histogram Equalization")
-        self.clahe_button = QPushButton("CLAHE")
-        self.custom_contrast_button = QPushButton("Custom Contrast")
-        self.gaussian_noise_button = QPushButton("Add Gaussian Noise")
-        self.salt_pepper_noise_button = QPushButton("Add Salt-and-Pepper Noise")
-        self.poisson_noise_button = QPushButton("Add Poisson Noise")
-
-        self.controls_layout.addWidget(self.gaussian_noise_button)
-        self.controls_layout.addWidget(self.salt_pepper_noise_button)
-        self.controls_layout.addWidget(self.poisson_noise_button)
-        self.controls_layout.addWidget(self.hist_eq_button)
-        self.controls_layout.addWidget(self.clahe_button)
-        self.controls_layout.addWidget(self.custom_contrast_button)
-        self.main_layout.addLayout(self.controls_layout)
-        self.hist_eq_button.clicked.connect(self.apply_histogram_equalization)
-        self.clahe_button.clicked.connect(self.apply_clahe)
-        self.custom_contrast_button.clicked.connect(self.apply_custom_contrast)
-        # Central widget
-        central_widget = QWidget()
-        central_widget.setLayout(self.main_layout)
-        self.setCentralWidget(central_widget)
-
-        # Connect buttons and sliders
-        self.open_button.clicked.connect(self.open_image)
+        # Connect signals to the respective slots
         self.input_label.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.input_label))
         self.output_label1.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.output_label1))
         self.output_label2.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.output_label2))
+        self.zoom_slider.valueChanged.connect(self.zoom_image)
+        self.brightness_slider.valueChanged.connect(self.adjust_brightness_contrast)
+        self.contrast_slider.valueChanged.connect(self.adjust_brightness_contrast)
 
-        self.gaussian_noise_button.clicked.connect(self.add_gaussian_noise)
-        self.salt_pepper_noise_button.clicked.connect(self.add_salt_pepper_noise)
-        self.poisson_noise_button.clicked.connect(self.add_poisson_noise)
+    def create_combobox(self, items, label_text):
+        """Create a labeled combobox."""
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(label_text))
+        combobox = QComboBox()
+        combobox.addItems(items)
+        layout.addWidget(combobox)
+        self.controls_layout.addLayout(layout)
+        return combobox
+
+    def create_slider(self, orientation, min_value, max_value, initial_value, label_text):
+        """Create a labeled slider."""
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel(label_text))
+        slider = QSlider(orientation)
+        slider.setRange(min_value, max_value)
+        slider.setValue(initial_value)
+        slider.setTickPosition(QSlider.TicksBelow)
+        slider.setTickInterval(1)
+        layout.addWidget(slider)
+        self.controls_layout.addLayout(layout)
+        return slider
 
     def open_image(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
@@ -161,26 +228,9 @@ class ImageViewer(QMainWindow):
         if self.original_image is None:
             print("No image loaded.")
             return
-
-        # Convert to grayscale for histogram equalization
-        gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_RGB2GRAY)
-        equalized_image = cv2.equalizeHist(gray_image)
-
-        # Convert back to 3-channel image for display
-        result_image = cv2.cvtColor(equalized_image, cv2.COLOR_GRAY2RGB)
-
-        # Display result
-        self.display_image(result_image, self.output_label1)
-
-    def apply_clahe(self):
-        if self.original_image is None:
-            print("No image loaded.")
-            return
-
         selected_edit_viewport = self.edit_viewport_selector.currentText()
         selected_apply_viewport = self.apply_viewport_selector.currentText()
 
-        # Map selection to QLabel
         viewport_mapping = {
             "Input Viewport": self.input_label,
             "Output Viewport 1": self.output_label1,
@@ -190,8 +240,41 @@ class ImageViewer(QMainWindow):
         edit_label = viewport_mapping[selected_edit_viewport]
         apply_label = viewport_mapping[selected_apply_viewport]
 
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
+
+        # Convert to grayscale for histogram equalization
+        gray_image = cv2.cvtColor(current_image, cv2.COLOR_RGB2GRAY)
+        equalized_image = cv2.equalizeHist(gray_image)
+
+        # Convert back to 3-channel image for display
+        result_image = cv2.cvtColor(equalized_image, cv2.COLOR_GRAY2RGB)
+
+        # Display result
+        self.display_image(result_image, apply_label)
+
+    def apply_clahe(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
+
         # Convert to grayscale for CLAHE
-        gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_RGB2GRAY)
+        gray_image = cv2.cvtColor(current_image, cv2.COLOR_RGB2GRAY)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         clahe_image = clahe.apply(gray_image)
 
@@ -218,18 +301,46 @@ class ImageViewer(QMainWindow):
         if self.original_image is None:
             print("No image loaded.")
             return
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
 
         # Apply Gamma Correction
         gamma = 1.5  # Change this value for different results
         look_up_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(256)]).astype("uint8")
-        result_image = cv2.LUT(self.original_image, look_up_table)
+        result_image = cv2.LUT(current_image, look_up_table)
 
         # Display result
-        self.display_image(result_image, self.output_label2)
+        self.display_image(result_image, apply_label)
     def adjust_brightness_contrast(self):
         if self.original_image is None:
             print("No image loaded.")
             return
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
 
         # Get brightness and contrast values
         brightness = self.brightness_slider.value()
@@ -240,22 +351,28 @@ class ImageViewer(QMainWindow):
         beta = brightness  # Brightness addition
 
         # Apply the adjustments to the image
-        adjusted_image = cv2.convertScaleAbs(self.original_image, alpha=alpha, beta=beta)
+        adjusted_image = cv2.convertScaleAbs(current_image, alpha=alpha, beta=beta)
 
-        # Determine which viewport to edit and apply changes
-        selected_edit_viewport = self.edit_viewport_selector.currentText()
-        selected_apply_viewport = self.apply_viewport_selector.currentText()
-#
-        # Map selection to QLabel
-        viewport_mapping = {
-            "Input Viewport": self.input_label,
-            "Output Viewport 1": self.output_label1,
-            "Output Viewport 2": self.output_label2,
-        }
 
-        apply_label = viewport_mapping[selected_apply_viewport]
         self.display_image(adjusted_image, apply_label)
 
+    def get_current_image(self, label):
+        # Retrieve the current image from the QLabel
+        pixmap = label.pixmap()
+        if pixmap is not None:
+            image = pixmap.toImage()
+            width = image.width()
+            height = image.height()
+
+            # Convert QImage to a NumPy array
+            ptr = image.constBits()
+            ptr.setsize(image.byteCount())
+            img_array = np.array(ptr).reshape((height, width, 4))  # Assuming RGBA format
+
+            # Convert to BGR format for OpenCV compatibility
+            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+            return img_bgr
+        return None
     def display_image(self, image, label, zoom_factor=1):
         if image is None:
             label.clear()
@@ -281,32 +398,34 @@ class ImageViewer(QMainWindow):
 
             # Crop and resize to QLabel dimensions
             cropped_image = image[y1:y2, x1:x2]
-            resized_image = cv2.resize(cropped_image, (label_width, label_height), interpolation=cv2.INTER_LINEAR)
-
+            selected_zoom_technique = self.zoom_technique.currentText()
+            #["Nearest-Neighbor", "Linear", "Bi-linear", "Cubic"]
+            if selected_zoom_technique == "Nearest-Neighbor":
+                resized_image = cv2.resize(cropped_image, (label_width, label_height), interpolation=cv2.INTER_NEAREST)
+            elif selected_zoom_technique == "Linear":
+                resized_image = cv2.resize(cropped_image, (label_width, label_height), interpolation=cv2.INTER_LINEAR)
+            elif selected_zoom_technique == "Bi-linear":
+                resized_image = cv2.resize(cropped_image, (label_width, label_height), interpolation=cv2.INTER_LINEAR)
+            elif  selected_zoom_technique == "Cubic":
+                resized_image = cv2.resize(cropped_image, (label_width, label_height), interpolation=cv2.INTER_CUBIC)
         # Convert the resized image to QImage
         height, width, channel = resized_image.shape
         bytes_per_line = 3 * width
         q_image = QImage(resized_image.data, width, height, bytes_per_line, QImage.Format_RGB888)
 
+
         # Display the image in the QLabel
         pixmap = QPixmap.fromImage(q_image)
         label.setPixmap(pixmap)
+
         label.setAlignment(Qt.AlignCenter)
 
     def zoom_image(self):
-        if self.original_image is None:
-            print("No image loaded.")
-            return
 
-        # Get the zoom factor from the slider
-        factor = self.zoom_slider.value()
-        print(f"Zoom Factor: {factor}")
 
-        # Determine which viewport to edit
         selected_edit_viewport = self.edit_viewport_selector.currentText()
         selected_apply_viewport = self.apply_viewport_selector.currentText()
 
-        # Map selection to QLabel
         viewport_mapping = {
             "Input Viewport": self.input_label,
             "Output Viewport 1": self.output_label1,
@@ -316,31 +435,88 @@ class ImageViewer(QMainWindow):
         edit_label = viewport_mapping[selected_edit_viewport]
         apply_label = viewport_mapping[selected_apply_viewport]
 
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
+        if current_image is None:
+            print("No image loaded.")
+            return
+
+        # Get the zoom factor from the slider
+        factor = self.zoom_slider.value()
+        print(f"Zoom Factor: {factor}")
+
+        # Determine which viewport to edit
+
+
         # Use the image from the edit viewport and apply changes to the apply viewport
-        edited_image = self.original_image  # Replace with logic to get the actual edited image from the edit viewport
+        edited_image = current_image  # Replace with logic to get the actual edited image from the edit viewport
         self.display_image(edited_image, apply_label, zoom_factor=factor)
 
     def add_gaussian_noise(self):
         if self.original_image is None:
             print("No image loaded.")
             return
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
 
-        # Add Gaussian noise
-        mean = 0
-        stddev = 25
-        gaussian_noise = np.random.normal(mean, stddev, self.original_image.shape).astype(np.uint8)
-        noisy_image = cv2.add(self.original_image, gaussian_noise)
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
 
-        # Display result
-        self.display_image(noisy_image, self.output_label1)
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+
+
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
+
+        mean = 0  # mean for Gaussian noise
+        sigma = 25  # standard deviation for Gaussian noise
+
+        # Check if current_image is loaded correctly and has the right dtype
+        if current_image is None:
+            raise ValueError("Current image is not loaded properly.")
+        if current_image.dtype != np.uint8:
+            raise ValueError("Current image should be of type uint8.")
+
+        # Generate Gaussian noise
+        gaussian_noise = np.random.normal(mean, sigma, current_image.shape).astype(np.float32)
+
+        # Apply noise, ensuring both images are of type float32
+        noisy_image = cv2.add(current_image.astype(np.float32), gaussian_noise)
+
+        # Clip the values to the uint8 range [0, 255]
+        noisy_image = np.clip(noisy_image, 0, 255)
+
+        # Convert back to uint8
+        noisy_image = noisy_image.astype(np.uint8)
+
+        # Display result in the apply viewport
+        self.display_image(noisy_image, apply_label)
 
     def add_salt_pepper_noise(self):
         if self.original_image is None:
             print("No image loaded.")
             return
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
 
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
         # Add Salt-and-Pepper noise
-        noisy_image = self.original_image.copy()
+        noisy_image = current_image
         prob = 0.02  # Probability of noise
         threshold = 1 - prob
         for i in range(noisy_image.shape[0]):
@@ -352,27 +528,139 @@ class ImageViewer(QMainWindow):
                     noisy_image[i, j] = 255  # Pepper
 
         # Display result
-        self.display_image(noisy_image, self.output_label2)
+        self.display_image(noisy_image, apply_label)
+
+    def apply_denoising(self):
+
+        if self.original_image is None:
+            return
+
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
+
+        method = self.denoising_dropdown.currentText()
+
+        noisy = current_image
+        print(method)
+        if method == "Median Filter":
+            denoised = cv2.medianBlur(noisy, 5)
+        elif method == "Gaussian Filter":
+            denoised = cv2.GaussianBlur(noisy, (5, 5), sigmaX=1)
+        elif method == "Non-Local Means":
+            denoised = cv2.fastNlMeansDenoisingColored(noisy, None, 10, 10, 7, 21)
+        print("passed denoising")
+        self.denoised_image = denoised
+        self.display_image(denoised,apply_label)
 
     def add_poisson_noise(self):
         if self.original_image is None:
             print("No image loaded.")
             return
 
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Copy the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
         # Add Poisson noise
-        noisy_image = np.random.poisson(self.original_image / 255.0 * 255).astype(np.uint8)
+        noisy_image = np.random.poisson(current_image / 255.0 * 255).astype(np.uint8)
 
         # Display result
-        self.display_image(noisy_image, self.output_label2)
+        self.display_image(noisy_image, apply_label)
 
-    def show_histogram(self, pos, label):
-        if self.original_image is None:
-            print("No image loaded.")
+    def apply_low_pass_filter(self):
+        # Map selection to QLabel
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Get the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
+        if current_image is None:
+            print("No image loaded in the selected edit viewport.")
             return
 
+        # Apply Gaussian Blur (Low-pass Filter)
+        low_pass_image = cv2.GaussianBlur(current_image, (5, 5), 0)
+
+        # Display result in the apply viewport
+        self.display_image(low_pass_image, apply_label)
+
+    # Apply High-pass Filter
+    def apply_high_pass_filter(self):
+        # Map selection to QLabel
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+        selected_apply_viewport = self.apply_viewport_selector.currentText()
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        apply_label = viewport_mapping[selected_apply_viewport]
+
+        # Get the current image from the edit viewport
+        current_image = self.get_current_image(edit_label)
+        if current_image is None:
+            print("No image loaded in the selected edit viewport.")
+            return
+
+        # Apply a high-pass filter using a kernel
+        low_pass_image = cv2.GaussianBlur(current_image, (21, 21), 0)
+        high_pass_image = cv2.subtract(current_image, low_pass_image)
+
+        # Display result in the apply viewport
+        self.display_image(high_pass_image, apply_label)
+
+    def show_histogram(self, pos, label):
+
+        selected_edit_viewport = self.edit_viewport_selector.currentText()
+
+        viewport_mapping = {
+            "Input Viewport": self.input_label,
+            "Output Viewport 1": self.output_label1,
+            "Output Viewport 2": self.output_label2,
+        }
+
+        edit_label = viewport_mapping[selected_edit_viewport]
+        current_image = self.get_current_image(edit_label)
+
+        if current_image is None:
+            print("No image loaded.")
+            return
         # Map QLabel coordinates to image coordinates
         label_width, label_height = label.width(), label.height()
-        height, width, _ = self.original_image.shape
+        height, width, _ = current_image.shape
 
         x = int(pos.x() * width / label_width)
         y = int(pos.y() * height / label_height)
@@ -382,17 +670,39 @@ class ImageViewer(QMainWindow):
         y = min(max(y, 0), height - 1)
 
         # Calculate histogram
-        hist_r = cv2.calcHist([self.original_image], [0], None, [256], [0, 256])
-        hist_g = cv2.calcHist([self.original_image], [1], None, [256], [0, 256])
-        hist_b = cv2.calcHist([self.original_image], [2], None, [256], [0, 256])
+        hist_r = cv2.calcHist([current_image], [0], None, [256], [0, 256])
+        hist_g = cv2.calcHist([current_image], [1], None, [256], [0, 256])
+        hist_b = cv2.calcHist([current_image], [2], None, [256], [0, 256])
 
         # Display histogram in a separate dialog
         histogram_dialog = HistogramDialog(hist_r, hist_g, hist_b, x, y, self)
         histogram_dialog.exec_()
 
+stylesheet = """ 
+QWidget{ background-color: rgb(30,30,30);color: White;}
+QLabel{ color: White;}
+QPushButton {color: White; }
+QTabWidget  {color: White; }
 
+    QTextEdit {
+
+               /* Blue text (rgb(9, 132, 227)) */
+        border: 1px solid rgb(9, 132, 227);    /* Gray border */
+    }
+
+
+    QTextEdit QScrollBar::up-arrow:vertical, 
+    QTextEdit QScrollBar::down-arrow:vertical {
+        background: rgb(9, 132, 227);   /* Arrow color */
+
+    }
+
+
+"""
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setStyle('Fusion')
+    app.setStyleSheet(stylesheet)
     viewer = ImageViewer()
     viewer.show()
     sys.exit(app.exec_())

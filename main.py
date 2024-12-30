@@ -84,12 +84,15 @@ class ImageViewer(QMainWindow):
         self.hist_eq_button = QPushButton("Histogram Equalization")
         self.clahe_button = QPushButton("CLAHE")
         self.custom_contrast_button = QPushButton("Custom Contrast")
+        self.SNR_calc = QPushButton("SNR")
 
         self.controls_layout.addWidget(self.hist_eq_button)
         self.controls_layout.addWidget(self.clahe_button)
         self.controls_layout.addWidget(self.custom_contrast_button)
+        self.controls_layout.addWidget(self.SNR_calc)
         self.main_layout.addLayout(self.controls_layout)
         self.hist_eq_button.clicked.connect(self.apply_histogram_equalization)
+        self.SNR_calc.clicked.connect(self.select_rois_and_calculate_snr)
         self.clahe_button.clicked.connect(self.apply_clahe)
         self.custom_contrast_button.clicked.connect(self.apply_custom_contrast)
         # Central widget
@@ -108,6 +111,8 @@ class ImageViewer(QMainWindow):
             self.original_image = cv2.imread(file_path, cv2.IMREAD_COLOR)
             self.original_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2RGB)
             self.processed_images["Input Viewport"] = self.original_image.copy()
+            self.grayscaled_image = cv2.imread(self.original_image, cv2.IMREAD_GRAYSCALE)
+
             self.display_image(self.original_image, self.input_label)
 
     def apply_histogram_equalization(self):
@@ -272,6 +277,75 @@ class ImageViewer(QMainWindow):
         # Use the image from the edit viewport and apply changes to the apply viewport
         edited_image = self.original_image  # Replace with logic to get the actual edited image from the edit viewport
         self.display_image(edited_image, apply_label, zoom_factor=factor)
+
+    
+    # Calculation of SNR of the image and ROIs
+
+    def calculate_snr_from_rois(image, roi_signal, roi_noise):
+        """
+        Calculate the Signal-to-Noise Ratio (SNR) using two ROIs: signal and noise.
+
+        Parameters:
+            image (numpy.ndarray): Input image (grayscale).
+            roi_signal (tuple): A tuple (x, y, w, h) representing the signal ROI.
+            roi_noise (tuple): A tuple (x, y, w, h) representing the noise ROI.
+
+        Returns:
+            float: SNR value.
+        """
+        # Extract the signal ROI from the image
+        x_s, y_s, w_s, h_s = roi_signal
+        signal_roi_image = image[y_s:y_s + h_s, x_s:x_s + w_s]
+        # Extract the noise ROI from the image
+        x_n, y_n, w_n, h_n = roi_noise
+        noise_roi_image = image[y_n:y_n + h_n, x_n:x_n + w_n]
+        # Calculate the mean intensity (signal) in the signal ROI
+        mean_signal = np.mean(signal_roi_image)
+        # Calculate the standard deviation (noise) in the noise ROI
+        noise = np.std(noise_roi_image)
+        # Avoid division by zero
+        if noise == 0:
+            return float('inf')  # SNR is infinite if no noise
+        # Compute SNR
+        snr = mean_signal / noise
+        return snr
+
+    def select_rois_and_calculate_snr(image):
+        """
+        Allow the user to select two ROIs (signal and noise) and calculate the SNR.
+
+        Parameters:
+            image (numpy.ndarray): Input image (grayscale).
+        """
+        # Let the user select the signal ROI
+        print("Select the signal ROI:")
+        roi_signal = cv2.selectROI("Select Signal ROI", image, fromCenter=False, showCrosshair=True)
+        cv2.destroyWindow("Select Signal ROI")  # Close the ROI selection window
+
+        # Ensure the signal ROI is valid
+        if roi_signal[2] == 0 or roi_signal[3] == 0:
+            print("Invalid signal ROI selected.")
+            return
+
+        # Let the user select the noise ROI
+        print("Select the noise ROI:")
+        roi_noise = cv2.selectROI("Select Noise ROI", image, fromCenter=False, showCrosshair=True)
+        cv2.destroyWindow("Select Noise ROI")  # Close the ROI selection window
+
+        # Ensure the noise ROI is valid
+        if roi_noise[2] == 0 or roi_noise[3] == 0:
+            print("Invalid noise ROI selected.")
+            return
+
+        # Calculate SNR
+        snr_value = calculate_snr_from_rois(image, roi_signal, roi_noise)
+        
+
+    
+
+
+
+
 
 
 if __name__ == "__main__":

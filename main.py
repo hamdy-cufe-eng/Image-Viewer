@@ -5,7 +5,43 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QWidget, QSlider, QDialog, QGridLayout, QComboBox
 )
 from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint
+import matplotlib.pyplot as plt
+from PyQt5 import QtCore
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+class HistogramDialog(QDialog):
+    def __init__(self, red_hist, green_hist, blue_hist, x, y, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Histogram at ({x}, {y})")
+        self.resize(600, 400)
+
+
+        layout = QVBoxLayout(self)
+        self.canvas = FigureCanvas(Figure())
+        layout.addWidget(self.canvas)
+
+        self.plot_histogram(red_hist, green_hist, blue_hist)
+
+    def plot_histogram(self, red_hist, green_hist, blue_hist):
+        ax = self.canvas.figure.add_subplot(111)
+        ax.clear()
+        ax.plot(red_hist, color="r", label="Red")
+        ax.plot(green_hist, color="g", label="Green")
+        ax.plot(blue_hist, color="b", label="Blue")
+        ax.set_title("RGB Histogram")
+        ax.set_xlabel("Pixel Value")
+        ax.set_ylabel("Frequency")
+        ax.legend()
+        self.canvas.draw()
+
+class ClickableLabel(QLabel):
+    doubleClicked = pyqtSignal(QPoint)  # Signal to emit when label is double-clicked
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.doubleClicked.emit(event.pos())
+        super().mouseDoubleClickEvent(event)
 
 class ImageViewer(QMainWindow):
     def __init__(self):
@@ -27,9 +63,9 @@ class ImageViewer(QMainWindow):
         self.controls_layout = QVBoxLayout()
 
         # Input and output viewports
-        self.input_label = QLabel("Input Viewport")
-        self.output_label1 = QLabel("Output Viewport 1")
-        self.output_label2 = QLabel("Output Viewport 2")
+        self.input_label = ClickableLabel("Input Viewport")
+        self.output_label1 = ClickableLabel("Output Viewport 1")
+        self.output_label2 = ClickableLabel("Output Viewport 2")
 
         for label in [self.input_label, self.output_label1, self.output_label2]:
             label.setAlignment(Qt.AlignCenter)
@@ -99,7 +135,9 @@ class ImageViewer(QMainWindow):
 
         # Connect buttons and sliders
         self.open_button.clicked.connect(self.open_image)
-
+        self.input_label.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.input_label))
+        self.output_label1.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.output_label1))
+        self.output_label2.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.output_label2))
 
 
     def open_image(self):
@@ -272,6 +310,31 @@ class ImageViewer(QMainWindow):
         # Use the image from the edit viewport and apply changes to the apply viewport
         edited_image = self.original_image  # Replace with logic to get the actual edited image from the edit viewport
         self.display_image(edited_image, apply_label, zoom_factor=factor)
+
+    def show_histogram(self, pos, label):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        # Map QLabel coordinates to image coordinates
+        label_width, label_height = label.width(), label.height()
+        height, width, _ = self.original_image.shape
+
+        x = int(pos.x() * width / label_width)
+        y = int(pos.y() * height / label_height)
+
+        # Ensure coordinates are within bounds
+        x = min(max(x, 0), width - 1)
+        y = min(max(y, 0), height - 1)
+
+        # Calculate histogram
+        hist_r = cv2.calcHist([self.original_image], [0], None, [256], [0, 256])
+        hist_g = cv2.calcHist([self.original_image], [1], None, [256], [0, 256])
+        hist_b = cv2.calcHist([self.original_image], [2], None, [256], [0, 256])
+
+        # Display histogram in a separate dialog
+        histogram_dialog = HistogramDialog(hist_r, hist_g, hist_b, x, y, self)
+        histogram_dialog.exec_()
 
 
 if __name__ == "__main__":

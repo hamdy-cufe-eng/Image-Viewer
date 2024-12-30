@@ -198,7 +198,7 @@ class ImageViewer(QMainWindow):
         # Determine which viewport to edit and apply changes
         selected_edit_viewport = self.edit_viewport_selector.currentText()
         selected_apply_viewport = self.apply_viewport_selector.currentText()
-
+#
         # Map selection to QLabel
         viewport_mapping = {
             "Input Viewport": self.input_label,

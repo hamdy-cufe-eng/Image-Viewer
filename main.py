@@ -120,7 +120,13 @@ class ImageViewer(QMainWindow):
         self.hist_eq_button = QPushButton("Histogram Equalization")
         self.clahe_button = QPushButton("CLAHE")
         self.custom_contrast_button = QPushButton("Custom Contrast")
+        self.gaussian_noise_button = QPushButton("Add Gaussian Noise")
+        self.salt_pepper_noise_button = QPushButton("Add Salt-and-Pepper Noise")
+        self.poisson_noise_button = QPushButton("Add Poisson Noise")
 
+        self.controls_layout.addWidget(self.gaussian_noise_button)
+        self.controls_layout.addWidget(self.salt_pepper_noise_button)
+        self.controls_layout.addWidget(self.poisson_noise_button)
         self.controls_layout.addWidget(self.hist_eq_button)
         self.controls_layout.addWidget(self.clahe_button)
         self.controls_layout.addWidget(self.custom_contrast_button)
@@ -139,6 +145,9 @@ class ImageViewer(QMainWindow):
         self.output_label1.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.output_label1))
         self.output_label2.doubleClicked.connect(lambda pos: self.show_histogram(pos, self.output_label2))
 
+        self.gaussian_noise_button.clicked.connect(self.add_gaussian_noise)
+        self.salt_pepper_noise_button.clicked.connect(self.add_salt_pepper_noise)
+        self.poisson_noise_button.clicked.connect(self.add_poisson_noise)
 
     def open_image(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image Files (*.png *.jpg *.bmp)")
@@ -310,6 +319,51 @@ class ImageViewer(QMainWindow):
         # Use the image from the edit viewport and apply changes to the apply viewport
         edited_image = self.original_image  # Replace with logic to get the actual edited image from the edit viewport
         self.display_image(edited_image, apply_label, zoom_factor=factor)
+
+    def add_gaussian_noise(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        # Add Gaussian noise
+        mean = 0
+        stddev = 25
+        gaussian_noise = np.random.normal(mean, stddev, self.original_image.shape).astype(np.uint8)
+        noisy_image = cv2.add(self.original_image, gaussian_noise)
+
+        # Display result
+        self.display_image(noisy_image, self.output_label1)
+
+    def add_salt_pepper_noise(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        # Add Salt-and-Pepper noise
+        noisy_image = self.original_image.copy()
+        prob = 0.02  # Probability of noise
+        threshold = 1 - prob
+        for i in range(noisy_image.shape[0]):
+            for j in range(noisy_image.shape[1]):
+                rand = np.random.rand()
+                if rand < prob:
+                    noisy_image[i, j] = 0  # Salt
+                elif rand > threshold:
+                    noisy_image[i, j] = 255  # Pepper
+
+        # Display result
+        self.display_image(noisy_image, self.output_label2)
+
+    def add_poisson_noise(self):
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        # Add Poisson noise
+        noisy_image = np.random.poisson(self.original_image / 255.0 * 255).astype(np.uint8)
+
+        # Display result
+        self.display_image(noisy_image, self.output_label2)
 
     def show_histogram(self, pos, label):
         if self.original_image is None:

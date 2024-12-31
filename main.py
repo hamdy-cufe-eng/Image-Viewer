@@ -4,8 +4,8 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow,QAction, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QWidget, QSlider, QDialog, QGridLayout, QComboBox
 )
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint ,QRect
 import matplotlib.pyplot as plt
 from PyQt5 import QtCore
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -36,12 +36,67 @@ class HistogramDialog(QDialog):
         self.canvas.draw()
 
 class ClickableLabel(QLabel):
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.start_point = None
+        self.end_point = None
+        self.is_drawing = False
+        self.rois = []
     doubleClicked = pyqtSignal(QPoint)  # Signal to emit when label is double-clicked
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.doubleClicked.emit(event.pos())
         super().mouseDoubleClickEvent(event)
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and len(self.rois) < 2:  # Allow only two rectangles
+            self.start_point = event.pos()
+            self.is_drawing = True
+
+    def mouseMoveEvent(self, event):
+        if self.is_drawing:
+            self.end_point = event.pos()
+            self.update()  # Trigger repaint to show the rectangle
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.is_drawing:
+            self.end_point = event.pos()
+            self.is_drawing = False
+
+            # Calculate ROI as (x, y, w, h)
+            x1, y1 = self.start_point.x(), self.start_point.y()
+            x2, y2 = self.end_point.x(), self.end_point.y()
+            roi = (min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1))
+            self.rois.append(roi)  # Add ROI to the list
+            self.update()  # Final rectangle rendering
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.start_point and self.end_point:
+            painter = QPainter(self)
+            pen = QPen(Qt.red, 2, Qt.SolidLine)
+            painter.setPen(pen)
+
+            # Draw rectangles for all saved ROIs
+            for roi in self.rois:
+                x, y, w, h = roi
+                painter.drawRect(QRect(x, y, w, h))
+
+            # Draw the currently drawn rectangle
+            if self.is_drawing:
+                rect = QRect(self.start_point, self.end_point)
+                painter.drawRect(rect)
+
+    def get_rois(self):
+        """Return the stored ROIs."""
+        return self.rois
+
+    def reset(self):
+        """Clear all stored ROIs."""
+        self.rois = []
+        self.update()
+
 
 class ImageViewer(QMainWindow):
     def __init__(self):
@@ -75,6 +130,20 @@ class ImageViewer(QMainWindow):
         # Controls Layout
         self.controls_layout = QVBoxLayout()
         self.create_controls()
+
+        self.calculate_snr_button = QPushButton("Calculate SNR")
+        self.calculate_cnr_button = QPushButton("Calculate CNR")
+        self.reset_button = QPushButton("Reset Rectangles")
+        self.cnr_label = QLabel("CNR Value : NA")
+        self.snr_label = QLabel("SNR Value : NA")
+        self.controls_layout.addWidget(self.calculate_snr_button)
+        self.controls_layout.addWidget(self.calculate_cnr_button)
+        self.controls_layout.addWidget(self.reset_button)
+        self.controls_layout.addWidget(self.snr_label)
+        self.controls_layout.addWidget(self.cnr_label)
+        self.calculate_snr_button.clicked.connect(self.calculate_snr)
+        self.calculate_cnr_button.clicked.connect(self.calculate_cnr)
+        self.reset_button.clicked.connect(self.reset_rectangles)
         self.main_layout.addLayout(self.controls_layout)
 
         # Central Widget
@@ -677,6 +746,90 @@ class ImageViewer(QMainWindow):
         # Display histogram in a separate dialog
         histogram_dialog = HistogramDialog(hist_r, hist_g, hist_b, x, y, self)
         histogram_dialog.exec_()
+
+    def calculate_snr(self):
+        """Calculate SNR using the two selected ROIs."""
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        rois = self.input_label.get_rois()
+        if len(rois) < 2:
+            print("Please select two rectangles (signal and noise regions).")
+            return
+
+        # Extract the signal and noise regions
+        signal_roi = rois[0]
+        noise_roi = rois[1]
+
+        x_s, y_s, w_s, h_s = signal_roi
+        x_n, y_n, w_n, h_n = noise_roi
+
+        signal_region = self.original_image[y_s:y_s + h_s, x_s:x_s + w_s]
+        noise_region = self.original_image[y_n:y_n + h_n, x_n:x_n + w_n]
+
+        # Convert to grayscale for processing
+        signal_gray = cv2.cvtColor(signal_region, cv2.COLOR_BGR2GRAY)
+        noise_gray = cv2.cvtColor(noise_region, cv2.COLOR_BGR2GRAY)
+
+        # Calculate mean and std deviation
+        mean_signal = np.mean(signal_gray)
+        std_noise = np.std(noise_gray)
+
+        if std_noise == 0:
+            print("Noise standard deviation is zero. Cannot calculate SNR.")
+            return
+
+        snr = mean_signal / std_noise
+        print(f"Calculated SNR: {snr:.2f}")
+        new_snr_value = f"SNR Value : {snr:.2f}"
+        self.snr_label.setText(new_snr_value)
+
+
+    def calculate_cnr(self):
+        """Calculate CNR using the two selected ROIs."""
+        if self.original_image is None:
+            print("No image loaded.")
+            return
+
+        rois = self.input_label.get_rois()
+        if len(rois) < 2:
+            print("Please select two rectangles (signal and noise regions).")
+            return
+
+        # Extract the signal and noise regions
+        signal_roi = rois[0]
+        noise_roi = rois[1]
+
+        x_s, y_s, w_s, h_s = signal_roi
+        x_n, y_n, w_n, h_n = noise_roi
+
+        signal_region = self.original_image[y_s:y_s + h_s, x_s:x_s + w_s]
+        noise_region = self.original_image[y_n:y_n + h_n, x_n:x_n + w_n]
+
+        # Convert to grayscale for processing
+        signal_gray = cv2.cvtColor(signal_region, cv2.COLOR_BGR2GRAY)
+        noise_gray = cv2.cvtColor(noise_region, cv2.COLOR_BGR2GRAY)
+
+        # Calculate mean and std deviation
+        mean_signal = np.mean(signal_gray)
+        mean_noise = np.mean(noise_gray)
+        std_noise = np.std(noise_gray)
+
+        if std_noise == 0:
+            print("Noise standard deviation is zero. Cannot calculate CNR.")
+            return
+
+        cnr = abs(mean_signal - mean_noise) / std_noise
+
+        new_cnr_value = f"CNR Value : {cnr:.2f}"
+        print(f"Calculated CNR: {cnr:.2f}")
+        self.cnr_label.setText(new_cnr_value)
+
+    def reset_rectangles(self):
+        """Reset rectangles on the image."""
+        self.input_label.reset()
+
 
 stylesheet = """ 
 QWidget{ background-color: rgb(30,30,30);color: White;}

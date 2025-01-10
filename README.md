@@ -11,11 +11,11 @@
 </p>
 <div align="center">
 
-[![GitHub contributors](https://img.shields.io/github/contributors/hamdy-cufe-eng/Dicom-Viewer)](https://github.com/hamdy-cufe-eng/Dicom-Viewer/contributors)
-[![GitHub issues](https://img.shields.io/github/issues/hamdy-cufe-eng/Dicom-Viewer)](https://github.com/hamdy-cufe-eng/Dicom-Viewer/issues)
-[![GitHub forks](https://img.shields.io/github/forks/hamdy-cufe-eng/Dicom-Viewer)](https://github.com/hamdy-cufe-eng/Dicom-Viewer/network)
-[![GitHub stars](https://img.shields.io/github/stars/hamdy-cufe-eng/Dicom-Viewer)](https://github.com/hamdy-cufe-eng/Dicom-Viewer/stargazers)
-[![GitHub license](https://img.shields.io/github/license/hamdy-cufe-eng/Dicom-Viewer)](https://github.com/hamdy-cufe-eng/Dicom-Viewer/blob/main/LICENSE)
+[![GitHub contributors](https://img.shields.io/github/contributors/hamdy-cufe-eng/Image-Viewer)](https://github.com/hamdy-cufe-eng/Image-Viewer/contributors)
+[![GitHub issues](https://img.shields.io/github/issues/hamdy-cufe-eng/Image-Viewer)](https://github.com/hamdy-cufe-eng/Image-Viewer/issues)
+[![GitHub forks](https://img.shields.io/github/forks/hamdy-cufe-eng/Image-Viewer)](https://github.com/hamdy-cufe-eng/Image-Viewer/network)
+[![GitHub stars](https://img.shields.io/github/stars/hamdy-cufe-eng/Image-Viewer)](https://github.com/hamdy-cufe-eng/Image-Viewer/stargazers)
+[![GitHub license](https://img.shields.io/github/license/hamdy-cufe-eng/Image-Viewer)](https://github.com/hamdy-cufe-eng/Image-Viewer/blob/main/LICENSE)
 
 </div>
 
@@ -59,7 +59,7 @@
 ## 🏁 Get Started /Installation <a name = "install"></a>
 1. **Clone the repository**
 ```
-git clone https://github.com/hamdy-cufe-eng/Dicom-Viewer.git
+git clone https://github.com/hamdy-cufe-eng/Image-Viewer.git
 ```
 2. **Install Visual Studio Code || PyCharm**
 

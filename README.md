@@ -44,7 +44,7 @@
 
 ## About
 
- Advanced Dicom Viewer with multiple features, 
+ Advanced Image Viewer with multiple features, 
  Simplified interface for viewing/displaying data .
 
 ## 💻 Built Using <a name = "tech"></a>

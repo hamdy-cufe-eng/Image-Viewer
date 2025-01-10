@@ -81,34 +81,32 @@ pip install
 ## 📌 How to use <a name = "start"></a>
 
 ### Usage :
-- After compiling the project , try to load the desired file (M2D ,2D,3D) using the **Open DICOM File** button
-- Click **View All DICOM Tags** to view all tags 
-- You can use search for a specifec keyword in the tags 
+- After compiling the project , try to load the desired image using the **File** in the menu bar
+- You can apply various changes in the multiple viewports available 
+- You can also calculate the SNR / CNR values 
 
 ## 🎆 Features <a name = "features"></a>
 
-- Loading multi-files ~> M2d , 3D, 2d
-- Viewing 3d as tiles / video
-- Viewing M2d as video playback (ability to auto-startover) and 2D as Image
-- Viewing Patient info by group tags , Meta ,Equipment,Image ,etc by adding keywords to array
-- Ability to search for a specifec keyword
-- Anonomyzing the values of selected keywords by appending a constant prefix
-- Filtering unnecessary keywords
-- Displaying the current status on a customized textbox
+- Applying High/low pass filters
+- Viewing Histogram by double clicking the image
+- Applying Brightness
+- Applying Contrast with 4 different methods
+- Calculating SNR /CNR
+- Zooming up to 4x !
+- Applying multiple zoom methods ( **Nearest Neighbor** , **Linear** , **Bi-Linear**, **Cubic** ) 
+- Applying multiple noise techniques ( **Poisson Noise** , **Gaussian Noise** , **Salt & Pepper Noise** )
+- Applying multiple denoising techniques ( **Median Filter** , **Gaussian Filter** , **Non-Local means Filter** )
 - Modern Flat-UI 
 
 ## 📷 Screenshots <a name = "screenshots" ></a>
 
 <div name="Screenshots" align="center">
-   <img width=60% src="Screenshots/Screenshot_4.png" alt="logo">
+   <img width=60% src="Screenshots/Screenshot_1.png" alt="logo">
    <hr>
     <img width=60% src="Screenshots/Screenshot_3.png" alt="logo">
     <hr>
   
    <img width=60% src="Screenshots/Screenshot_2.png" alt="logo">
-   <hr>
-  
-   <img width=60% src="Screenshots/Screenshot_1.png" alt="logo">
    <hr>
 </div>
 

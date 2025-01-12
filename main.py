@@ -35,6 +35,7 @@ class HistogramDialog(QDialog):
         ax.legend()
         self.canvas.draw()
 
+# to draw on labels
 class ClickableLabel(QLabel):
 
     def __init__(self, text="", parent=None):
